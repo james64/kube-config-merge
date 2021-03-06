@@ -17,16 +17,49 @@ def empty(args):
 
 
 def add(args):
-  # set current config if not present
-  print(args)
+  with open(args.kube_config, 'r+') as conf_file:
+    config = yaml.load(conf_file, Loader=yaml.FullLoader)
+
+    if args.cluster_name in { c['name'] for c in config['clusters'] }:
+      print('Cluster name already exists')
+      return None
+
+    with open(args.add_config, 'r') as add_file:
+      if 'current-context' not in config:
+        config['current-context'] = args.cluster_name
+
+      added  = yaml.load(add_file,  Loader=yaml.FullLoader)
+
+      newCluster = added['clusters'][0]
+      newCluster['name'] = args.cluster_name
+      config['clusters'].append(newCluster)
+
+      newContext = {
+        'name': args.cluster_name,
+        'context' : {
+          'cluster': args.cluster_name,
+          'namespace': 'default',
+          'user': args.cluster_name
+        }
+      }
+      config['contexts'].append(newContext)
+
+      newUser = added['users'][0]
+      newUser['name'] = args.cluster_name
+      config['users'].append(newUser)
+
+      conf_file.seek(0)
+      yaml.dump(config, conf_file)
+      conf_file.truncate()
+
 
 def drop(args):
   with open(args.kube_config, 'r+') as file:
     config = yaml.load(file, Loader=yaml.FullLoader)
 
-    config['clusters'] = [ c for c in config['clusters'] if c.name != args.cluster_name ]
-    config['contexts'] = [ c for c in config['contexts'] if c.name != args.cluster_name ]
-    config['users']    = [ c for c in config['users']    if c.name != args.cluster_name ]
+    config['clusters'] = [ c for c in config['clusters'] if c['name'] != args.cluster_name ]
+    config['contexts'] = [ c for c in config['contexts'] if c['name'] != args.cluster_name ]
+    config['users']    = [ c for c in config['users']    if c['name'] != args.cluster_name ]
 
     if config['current-context'] == args.cluster_name:
       if len(config['clusters']) == 0:
@@ -34,9 +67,9 @@ def drop(args):
       else:
         config['current-context'] = config['clusters'][0]['name']
 
-    f.seek(0)
-    yaml.dump(config, f)
-    f.truncate()
+    file.seek(0)
+    yaml.dump(config, file)
+    file.truncate()
 
 
 parser = argparse.ArgumentParser(prog='kadd')
